@@ -202,6 +202,12 @@ begin
     puts ' DONE'
   end
 
+  update_response = HTTParty.post("#{server_url}/dashboards/#{dashboard_id}/refresh",
+                                      headers: {
+                                          'Content-Type'  => 'application/json',
+                                          'token' => token
+                                      }
+				)
 
 rescue OptionParser::InvalidOption, OptionParser::MissingArgument
   puts $!.to_s
