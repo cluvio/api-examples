@@ -96,6 +96,11 @@ begin
     puts "Datasource #{datasource_id} not found"
     exit 2
   end
+
+  datasource = JSON.parse(datasource_response.body)
+  datasource_name = datasource['data']['attributes']['name']
+
+  puts " OK, name: #{datasource_name}"
  
   print 'Checking dashboard...'
 
