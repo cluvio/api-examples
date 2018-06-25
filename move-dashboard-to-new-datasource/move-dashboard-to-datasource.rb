@@ -46,7 +46,6 @@ begin
   if password.nil? || password.empty?
     print 'Password: '
     password = STDIN.noecho(&:gets).chomp
-    puts password
   end
 
   server_url = options[:server] || 'https://api.cluvio.com'
