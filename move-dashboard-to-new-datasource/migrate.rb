@@ -6,7 +6,7 @@ require 'io/console'
 
 options = {}
 optparse = OptionParser.new do |opts|
-  opts.banner = 'Usage: move-dashboard-to-datasource.rb [options]'
+  opts.banner = 'Usage: migrate.rb [options]'
 
   opts.on('-u', '--user=<user_name>', String, 'Account username/email') do |value|
     options[:user] = value
@@ -16,12 +16,20 @@ optparse = OptionParser.new do |opts|
     options[:password] = value
   end
 
-  opts.on('--dashboard=<dashboard_id>', String, 'Dashboard id') do |value|
+  opts.on('-d', '--dashboard=<dashboard_id>', String, 'Dashboard id') do |value|
     options[:dashboard] = value
   end
 
   opts.on('--datasource=<datasource_id>', String, 'Datasource id') do |value|
     options[:datasource] = value
+  end
+
+  opts.on('--from=<from_value>', String, 'From Filter value') do |value|
+    options[:from_value] = value
+  end
+
+  opts.on('--to=<to_value>', String, 'To Filter value') do |value|
+    options[:to_value] = value
   end
 
   opts.on('-s', '--server=[server_host]', String, 'Cluvio server host (optional, only needed when used with Cluvio private cloud instances)') do |value|
@@ -36,7 +44,7 @@ end
 begin
   optparse.parse!
 
-  mandatory = [:user, :dashboard, :datasource]
+  mandatory = [:user, :dashboard, :datasource, :from_value, :to_value]
   missing = mandatory.select{ |param| options[param].nil? }
   unless missing.empty?
     raise OptionParser::MissingArgument.new(missing.join(', '))
@@ -49,8 +57,10 @@ begin
   end
 
   server_url = options[:server] || 'https://api.cluvio.com'
-  datasource_id = options[:datasource]
   dashboard_id = options[:dashboard]
+  datasource_id = options[:datasource]
+  from_value = options[:from_value]
+  to_value = options[:to_value]
 
   res = HTTParty.post("#{server_url}/users/sign_in",
                       body: {
@@ -71,7 +81,6 @@ begin
   end
 
   token = JSON.parse(res.body)['token']
- 
 
   print 'Checking datasource...'
 
@@ -89,10 +98,10 @@ begin
   end
 
   datasource = JSON.parse(datasource_response.body)
-  
   datasource_name = datasource['data']['attributes']['name']
 
   puts " OK, name: #{datasource_name}"
+ 
   print 'Checking dashboard...'
 
   dashboard_response = HTTParty.get("#{server_url}/dashboards/#{dashboard_id}",
@@ -118,7 +127,7 @@ begin
     puts 'The dashboard contains no reports, I\'ve got nothing to do'
     exit 0
   end
-  puts "The dashboard contains #{num_reports} report#{num_reports > 1 ? 's' : ''}. Do you want to proceed and update these to use the '#{datasource_name}' datasource?"
+  puts "The dashboard contains #{num_reports} report#{num_reports > 1 ? 's' : ''}. Do you want to proceed using the '#{datasource_name}' datasource and replacing filter 'filter_#{from_value}' by 'filter_#{to_value}'?"
   print '[Y/n]: '
   prompt = STDIN.gets.chomp
   if prompt == 'n' || prompt == 'N'
@@ -128,6 +137,8 @@ begin
 
   dashboard['data']['relationships']['reports']['data'].each do |report|
     print "Updating report #{report['id']}..."
+
+    # update datasource
     update_response = HTTParty.put("#{server_url}/reports/#{report['id']}",
                                       body: {
                                         data: {
@@ -154,6 +165,35 @@ begin
                                           'token' => token
                                       }
     )
+
+    # update filters
+    report_response = HTTParty.get("#{server_url}/reports/#{report['id']}",
+                                     headers: {
+                                         'Content-Type'  => 'application/json',
+                                         'token' => token
+                                     }
+    )
+
+    unless report_response.success?
+      puts ' ERROR'
+      puts "Report #{report['id']} not found"
+      exit 2
+    end
+
+    report_json = JSON.parse(report_response.body)
+
+    query_upd = report_json['data']['attributes']['query'].gsub "filter_#{from_value}", "filter_#{to_value}"
+    report_json['data']['attributes']['query'] = query_upd
+    update_response = HTTParty.patch("#{server_url}/reports/#{report['id']}",
+                                      body: {
+                                        data: report_json['data']
+                                      }.to_json,
+                                      headers: {
+                                          'Content-Type'  => 'application/json',
+                                          'token' => token
+                                      }
+    )
+
     unless update_response.success?
       puts ' ERROR'
       puts update_response
@@ -162,6 +202,12 @@ begin
     puts ' DONE'
   end
 
+  update_response = HTTParty.post("#{server_url}/dashboards/#{dashboard_id}/refresh",
+                                      headers: {
+                                          'Content-Type'  => 'application/json',
+                                          'token' => token
+                                      }
+				)
 
 rescue OptionParser::InvalidOption, OptionParser::MissingArgument
   puts $!.to_s
