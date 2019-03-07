@@ -71,7 +71,7 @@ begin
     exit 2
   end
 
-  token = JSON.parse(res)['token']
+  token = JSON.parse(res.body)['token']
 
   print 'Checking datasource...'
 
@@ -88,7 +88,7 @@ begin
     exit 2
   end
 
-  datasource = JSON.parse(datasource_response)
+  datasource = JSON.parse(datasource_response.body)
   datasource_name = datasource['data']['attributes']['name']
 
   puts " OK, name: #{datasource_name}"
@@ -107,7 +107,7 @@ begin
     exit 2
   end
 
-  dashboard = JSON.parse(dashboard_response)
+  dashboard = JSON.parse(dashboard_response.body)
   dashboard_name = dashboard['data']['attributes']['name']
   num_reports = dashboard['data']['relationships']['reports']['data'].length
   puts " OK, name: #{dashboard_name}"
