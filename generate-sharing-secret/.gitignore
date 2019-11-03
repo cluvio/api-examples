@@ -1,0 +1,9 @@
+# Ignore bundler config.
+/.bundle
+
+# Do not check in the Gemfile.lock
+/Gemfile.lock
+
+# Ignore DS_STORE files that are created by OSX
+._.DS_Store
+.DS_Store
